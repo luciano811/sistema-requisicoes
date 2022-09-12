@@ -28,5 +28,11 @@ export class AuthenticationService {
 
   public resetarSenha(email: string): Promise<void> {
     return this.auth.sendPasswordResetEmail(email);
+
   }
+
+  public cadastrar(email:string, senha: string): Promise<firebase.auth.UserCredential> {
+    return this.auth.createUserWithEmailAndPassword(email, senha);
+ }
+
 }

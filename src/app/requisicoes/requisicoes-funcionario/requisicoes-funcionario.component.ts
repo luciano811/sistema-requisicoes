@@ -3,12 +3,14 @@ import { FormGroup, FormBuilder, FormControl, Validators, AbstractControl } from
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { getAuth } from 'firebase/auth';
 import { ToastrService } from 'ngx-toastr';
-import { Observable } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
+import { AuthenticationService } from 'src/app/auth/services/authentication.service';
 import { Departamento } from 'src/app/departamentos/models/departamento.model';
 import { DepartamentoService } from 'src/app/departamentos/services/departamento.service';
 import { Equipamento } from 'src/app/equipamentos/models/equipamento.model';
 import { EquipamentoService } from 'src/app/equipamentos/services/equipamento.service';
 import { Funcionario } from 'src/app/funcionarios/models/funcionario.model';
+import { FuncionarioService } from 'src/app/funcionarios/service/funcionario.service';
 import { Requisicao } from '../models/requisicao.model';
 import { RequisicaoService } from '../services/requisicao.service';
 
@@ -23,10 +25,17 @@ export class RequisicoesFuncionarioComponent implements OnInit {
   public equipamentos$: Observable<Equipamento[]>;
   public form: FormGroup;
 
+  private processoAutenticado$: Subscription;
+
+  funcionarioLogadoId: string;
+
+
   constructor(
     private toastrService: ToastrService,
     private requisicaoService: RequisicaoService,
     private departamentoService: DepartamentoService,
+    private funcionarioService: FuncionarioService,
+    private authService: AuthenticationService,
     private equipamentoService: EquipamentoService,
     private modalService: NgbModal,
     private fb: FormBuilder
@@ -47,7 +56,20 @@ export class RequisicoesFuncionarioComponent implements OnInit {
 
     this.departamentos$ = this.departamentoService.selecionarTodos();
     this.equipamentos$ = this.equipamentoService.selecionarTodos();
-    this.requisicoes$ = this.requisicaoService.selecionarTodos();
+    //this.requisicoes$ = this.requisicaoService.selecionarTodos();
+    this.processoAutenticado$ = this.authService.usuarioLogado.subscribe(usuario => {
+      const email: string = usuario?.email!;
+
+      this.funcionarioService.selecionarFuncionarioLogado(email)
+        .subscribe(funcionario => {
+          this.funcionarioLogadoId = funcionario.id;
+          this.requisicoes$ = this.requisicaoService.selecionarRequisicoesFuncionarioAtual(this.funcionarioLogadoId);
+        })
+    })
+  }
+
+  ngOnDestroy(): void {
+    this.processoAutenticado$.unsubscribe();
   }
 
   get tituloModal(): string {
@@ -70,12 +92,22 @@ export class RequisicoesFuncionarioComponent implements OnInit {
     return this.form.get('funcionarioId');
   }
 
+  get funcionario() {
+    return this.form.get("funcionario");
+  }
+
   get departamentoId(): AbstractControl | null {
     return this.form.get('departamentoId');
   }
 
   get equipamentoId(): AbstractControl | null {
     return this.form.get('equipamentoId');
+  }
+
+  private configurarValoresPadrao(): void {
+    this.form.get("dataAbertura")?.setValue(new Date());
+    this.form.get("equipamentoId")?.setValue(null);
+    this.form.get("funcionarioId")?.setValue(this.funcionarioLogadoId);
   }
 
   public async gravar(modal: TemplateRef<any>, requisicao?: Requisicao) {
@@ -86,6 +118,9 @@ export class RequisicoesFuncionarioComponent implements OnInit {
         ? requisicao.departamento
         : null;
 
+      const funcionario = requisicao.funcionario ? requisicao.funcionario : null;
+
+
       const equipamento = requisicao.equipamento
         ? requisicao.equipamento
         : null;
@@ -94,6 +129,8 @@ export class RequisicoesFuncionarioComponent implements OnInit {
         ...requisicao,
         departamento,
         equipamento,
+        funcionario,
+
       };
 
       this.form.setValue(requisicaoCompleta);
